@@ -56,13 +56,17 @@ def parse_status(homework):
 
 
 def check_tokens():
-    try:
-        if PRACTICUM_TOKEN and TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
-            return True
-    except Exception as err:
-        logging.error(f'Отсутствует обязательная переменная окружения')
-        logging.error('Программа принудительно остановлена.')
-        sys.exit()
+    for token in (PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID):
+        try:
+            if token:
+                return True
+        except Exception as err:
+            logging.error(
+                f'Отсутствует обязательная переменная окружения {token}',
+                err,
+            )
+            logging.error('Программа принудительно остановлена.')
+            sys.exit()
 
 
 def main():
