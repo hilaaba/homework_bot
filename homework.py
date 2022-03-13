@@ -113,8 +113,13 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет обязательные переменные окружения."""
+    return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
+
+
+def main():
+    """Основная логика работы бота."""
     try:
-        if not all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)):
+        if not check_tokens():
             raise KeyError
     except KeyError:
         logger.critical(
@@ -122,17 +127,11 @@ def check_tokens():
             'Программа принудительно остановлена.'
         )
         sys.exit()
-    return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
-
-
-def main():
-    """Основная логика работы бота."""
-    check_tokens()
     bot = Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
-    previous_homeworks = dict()
     last_homework = 0
-    last_error = Exception()
+    previous_homeworks = dict()
+    previous_error = Exception()
     while True:
         try:
             response = get_api_answer(current_timestamp)
@@ -155,15 +154,16 @@ def main():
             sys.exit()
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
-            logger.error(message)
             try:
-                if last_error.args != error.args:
+                if previous_error.args != error.args:
                     send_message(bot, message)
-                    last_error = error
+                    previous_error = error
+                    return previous_error
             except telegram.error.BadRequest:
                 logger.error(
                     'Bot не смог отправить сообщение об ошибке в Telegram.'
                 )
+            logger.error(message)
             time.sleep(RETRY_TIME)
 
 
