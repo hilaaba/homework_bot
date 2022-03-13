@@ -144,6 +144,7 @@ def main():
             elif previous_homeworks != homeworks:
                 status = parse_status(homeworks[last_homework])
                 send_message(bot, status)
+                logger.info(status)
                 previous_homeworks = homeworks
             else:
                 logger.debug('Статус домашней работы не поменялся.')
