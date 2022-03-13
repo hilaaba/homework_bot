@@ -14,8 +14,8 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-RETRY_TIME = 60
-ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
+RETRY_TIME = 600
+ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/sd/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 HOMEWORK_STATUSES = {
@@ -68,23 +68,19 @@ def send_message(bot, message):
 def get_api_answer(current_timestamp):
     """Отправляет запрос к API."""
     params = {'from_date': current_timestamp}
+    response = requests.get(
+        ENDPOINT,
+        headers=HEADERS,
+        params=params,
+    )
     try:
-        response = requests.get(
-            ENDPOINT,
-            headers=HEADERS,
-            params=params,
-        )
         if response.status_code != requests.codes.ok:
             raise requests.RequestException
         return response.json()
     except requests.RequestException:
-        status_code = requests.get(
-            ENDPOINT,
-            headers=HEADERS,
-            params=params,
-        ).status_code
         message = (
-            f'Эндпоинт {ENDPOINT} недоступен.\nКод ответа API: {status_code}'
+            f'Эндпоинт {ENDPOINT} недоступен.\n'
+            f'Код ответа API: {response.status_code}'
         )
         raise requests.RequestException(message)
 
@@ -104,12 +100,11 @@ def check_response(response):
 
 def parse_status(homework):
     """Извлекает статус домашней работы."""
+    for key in ('homework_name', 'status'):
+        if key not in homework:
+            raise KeyError(f'В homework отсутствует ключ: {key}.')
     homework_name = homework.get('homework_name')
-    if not homework_name:
-        raise KeyError('В homework отсутствует ключ homework_name.')
     homework_status = homework.get('status')
-    if not homework_status:
-        raise KeyError('В homework отсутствует ключ homework_status.')
     if homework_status not in HOMEWORK_STATUSES:
         raise AssertionError('Недокументированный статус домашней работы.')
     verdict = HOMEWORK_STATUSES.get(homework_status)
@@ -137,6 +132,7 @@ def main():
     current_timestamp = int(time.time())
     previous_homeworks = dict()
     last_homework = 0
+    last_error = Exception()
     while True:
         try:
             response = get_api_answer(current_timestamp)
@@ -161,7 +157,9 @@ def main():
             message = f'Сбой в работе программы: {error}'
             logger.error(message)
             try:
-                send_message(bot, message)
+                if last_error.args != error.args:
+                    send_message(bot, message)
+                    last_error = error
             except telegram.error.BadRequest:
                 logger.error(
                     'Bot не смог отправить сообщение об ошибке в Telegram.'
