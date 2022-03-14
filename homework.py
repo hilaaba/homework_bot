@@ -61,7 +61,7 @@ def send_message(bot, message):
             'Возможно неправильно задан TELEGRAM_TOKEN.\n'
             'Программа принудительно остановлена.'
         )
-        logger.critical(message, exc_info=True)
+        logger.critical(message)
         sys.exit()
 
 
@@ -116,17 +116,23 @@ def check_tokens():
     return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
 
 
-def main():
-    """Основная логика работы бота."""
+def check_program_starting():
+    """Проверяет запуск программы."""
     try:
         if not check_tokens():
-            raise KeyError
-    except KeyError:
+            raise ValueError
+        logger.info('Программа запущена.')
+    except ValueError:
         logger.critical(
             'Отсутствует обязательная переменная окружения.\n'
             'Программа принудительно остановлена.'
         )
         sys.exit()
+
+
+def main():
+    """Основная логика работы бота."""
+    check_program_starting()
     bot = Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
     last_homework = 0
@@ -137,7 +143,7 @@ def main():
             response = get_api_answer(current_timestamp)
             homeworks = check_response(response)
             if not homeworks:
-                logger.info(
+                logger.debug(
                     'В настоящее время на проверке нет домашней работы или '
                     'ревьюер еще не начал проверку.'
                 )
@@ -147,7 +153,7 @@ def main():
                 logger.info(status)
                 previous_homeworks = homeworks
             else:
-                logger.debug('Статус домашней работы не поменялся.')
+                logger.debug('Статус домашней работы не изменился.')
             current_timestamp = response.get('current_date')
             time.sleep(RETRY_TIME)
         except KeyboardInterrupt:
@@ -159,7 +165,6 @@ def main():
                 if previous_error.args != error.args:
                     send_message(bot, message)
                     previous_error = error
-                    return previous_error
             except telegram.error.BadRequest:
                 logger.error(
                     'Bot не смог отправить сообщение об ошибке в Telegram.'
