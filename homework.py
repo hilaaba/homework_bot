@@ -18,20 +18,11 @@ RETRY_TIME = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-HOMEWORK_STATUSES = {
+HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
-
-logging.basicConfig(
-    level=logging.INFO,
-    filename='app.log',
-    filemode='a',
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%d-%b-%y %H:%M:%S',
-    encoding='utf-8',
-)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -46,12 +37,12 @@ logger.addHandler(handler)
 
 def send_message(bot, message):
     """Bot отправляет сообщение в Telegram."""
+    logger.info('Bot начал отправку сообщения в Telegram.')
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logger.info('Bot отправил новое сообщение в Telegram.')
     except telegram.error.BadRequest as error:
         message = (
-            'При попытке отправки сообщения в Telegram '
+            'При попытке отправки сообщения '
             f'произошла ошибка: {error}'
         )
         raise telegram.error.BadRequest(message)
@@ -63,11 +54,14 @@ def send_message(bot, message):
         )
         logger.critical(message)
         sys.exit()
+    else:
+        logger.info('Bot отправил новое сообщение.')
 
 
 def get_api_answer(current_timestamp):
     """Отправляет запрос к API."""
-    params = {'from_date': current_timestamp}
+    timestamp = current_timestamp or int(time.time())
+    params = {'from_date': timestamp}
     response = requests.get(
         ENDPOINT,
         headers=HEADERS,
@@ -91,7 +85,7 @@ def check_response(response):
         raise TypeError('response не является словарем.')
     for key in ('homeworks', 'current_date'):
         if key not in response:
-            raise KeyError(f'В response отсутствует ключ: {key}')
+            raise KeyError(f'В response отсутствует ключ: {key}.')
     homeworks = response.get('homeworks')
     if not isinstance(response.get('homeworks'), list):
         raise TypeError('homeworks не является списком.')
@@ -105,9 +99,9 @@ def parse_status(homework):
             raise KeyError(f'В homework отсутствует ключ: {key}.')
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
-    if homework_status not in HOMEWORK_STATUSES:
-        raise AssertionError('Недокументированный статус домашней работы.')
-    verdict = HOMEWORK_STATUSES.get(homework_status)
+    if homework_status not in HOMEWORK_VERDICTS:
+        raise ValueError('Недокументированный статус домашней работы.')
+    verdict = HOMEWORK_VERDICTS.get(homework_status)
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -118,16 +112,13 @@ def check_tokens():
 
 def check_program_starting():
     """Проверяет запуск программы."""
-    try:
-        if not check_tokens():
-            raise ValueError
-        logger.info('Программа запущена.')
-    except ValueError:
+    if not check_tokens():
         logger.critical(
             'Отсутствует обязательная переменная окружения.\n'
             'Программа принудительно остановлена.'
         )
         sys.exit()
+    logger.info('Программа запущена.')
 
 
 def main():
@@ -155,7 +146,6 @@ def main():
             else:
                 logger.debug('Статус домашней работы не изменился.')
             current_timestamp = response.get('current_date')
-            time.sleep(RETRY_TIME)
         except KeyboardInterrupt:
             logger.info('Программа остановлена.')
             sys.exit()
@@ -170,8 +160,17 @@ def main():
                     'Bot не смог отправить сообщение об ошибке в Telegram.'
                 )
             logger.error(message)
+        finally:
             time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO,
+        filename='app.log',
+        filemode='a',
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        datefmt='%d-%b-%y %H:%M:%S',
+        encoding='utf-8',
+    )
     main()
