@@ -1,5 +1,5 @@
 class ExceptionDontRequireSendingToTelegram(Exception):
-    """Исключения, которые не требуют отправки сообщения в Телеграм"""
+    """Исключения, которые не требуют отправки сообщения в Телеграм."""
     pass
 
 
@@ -14,22 +14,19 @@ class UnauthorizedError(ExceptionDontRequireSendingToTelegram):
 
 
 class ExceptionRequireSendingToTelegram(Exception):
-    """Исключения, которые требуют отправки сообщения в Телеграм"""
-    pass
-
-
-class AnotherStatusError(ExceptionRequireSendingToTelegram):
+    """Исключения, которые требуют отправки сообщения в Телеграм."""
     pass
 
 
 class EndpointAPIError(ExceptionRequireSendingToTelegram):
+    """Возникает, когда код ответа HTTP отличный от 200."""
     pass
+
+
+class RequestAPIError(ExceptionRequireSendingToTelegram):
+    """Возникает, когда не удалось выполнить запрос к API."""
 
 
 class TokenError(ExceptionRequireSendingToTelegram):
     """Возникает, когда отсутствует обязательная переменная окружения."""
-    pass
-
-
-class HomeworkNameError(ExceptionRequireSendingToTelegram):
     pass

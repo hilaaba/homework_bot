@@ -8,6 +8,8 @@ import telegram.error
 from dotenv import load_dotenv
 from telegram import Bot
 
+from exceptions import (SendMessageError, UnauthorizedError, EndpointAPIError, RequestAPIError)
+
 load_dotenv()
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
@@ -41,42 +43,36 @@ def send_message(bot, message):
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
     except telegram.error.BadRequest as error:
-        message = (
+        error_message = (
             'При попытке отправки сообщения '
             f'произошла ошибка: {error}'
         )
-        raise telegram.error.BadRequest(message)
-    except telegram.error.Unauthorized:
-        message = (
-            'У Bot недостаточно прав для выполнения запроса. '
-            'Возможно неправильно задан TELEGRAM_TOKEN.\n'
-            'Программа принудительно остановлена.'
-        )
-        logger.critical(message)
-        sys.exit()
+        raise SendMessageError(error_message) from error
+    except telegram.error.Unauthorized as error:
+        raise UnauthorizedError from error
     else:
-        logger.info('Bot отправил новое сообщение.')
+        logger.info(f'Bot отправил новое сообщение: "{message}"')
 
 
 def get_api_answer(current_timestamp):
     """Отправляет запрос к API."""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
-    response = requests.get(
-        ENDPOINT,
-        headers=HEADERS,
-        params=params,
-    )
     try:
-        if response.status_code != requests.codes.ok:
-            raise requests.RequestException
-        return response.json()
-    except requests.RequestException:
-        message = (
-            f'Эндпоинт {ENDPOINT} недоступен.\n'
-            f'Код ответа API: {response.status_code}'
+        response = requests.get(
+            ENDPOINT,
+            headers=HEADERS,
+            params=params,
         )
-        raise requests.RequestException(message)
+        if response.status_code != requests.codes.ok:
+            message = (
+                f'Эндпоинт {ENDPOINT} недоступен.\n'
+                f'Код ответа API: {response.status_code}'
+            )
+            raise EndpointAPIError(message)
+        return response.json()
+    except requests.exceptions.RequestException as error:
+        raise RequestAPIError from error
 
 
 def check_response(response):
@@ -100,7 +96,7 @@ def parse_status(homework):
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if homework_status not in HOMEWORK_VERDICTS:
-        raise ValueError('Недокументированный статус домашней работы.')
+        raise KeyError('Недокументированный статус домашней работы.')
     verdict = HOMEWORK_VERDICTS.get(homework_status)
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -146,11 +142,16 @@ def main():
             else:
                 logger.debug('Статус домашней работы не изменился.')
             current_timestamp = response.get('current_date')
-        except KeyboardInterrupt:
-            logger.info('Программа остановлена.')
+        except UnauthorizedError:
+            logger.critical(
+                'У Bot недостаточно прав для выполнения запроса. '
+                'Возможно неправильно задан TELEGRAM_TOKEN.\n'
+                'Программа принудительно остановлена.'
+            )
             sys.exit()
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
+            logger.error(message)
             try:
                 if previous_error.args != error.args:
                     send_message(bot, message)
@@ -159,7 +160,6 @@ def main():
                 logger.error(
                     'Bot не смог отправить сообщение об ошибке в Telegram.'
                 )
-            logger.error(message)
         finally:
             time.sleep(RETRY_TIME)
 
