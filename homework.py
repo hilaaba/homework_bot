@@ -8,7 +8,10 @@ import telegram.error
 from dotenv import load_dotenv
 from telegram import Bot
 
-from exceptions import (SendMessageError, UnauthorizedError, EndpointAPIError, RequestAPIError)
+from exceptions import (
+    BotUnauthorizedError, SendMessageError, EndpointAPIError, RequestAPIError,
+    AnotherStatusError,
+)
 
 load_dotenv()
 
@@ -42,14 +45,13 @@ def send_message(bot, message):
     logger.info('Bot начал отправку сообщения в Telegram.')
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-    except telegram.error.BadRequest as error:
+    except telegram.error.Unauthorized as error:
+        raise BotUnauthorizedError from error
+    except telegram.error.NetworkError as error:
         error_message = (
-            'При попытке отправки сообщения '
-            f'произошла ошибка: {error}'
+            f'При попытке отправки сообщения произошла ошибка: {error}'
         )
         raise SendMessageError(error_message) from error
-    except telegram.error.Unauthorized as error:
-        raise UnauthorizedError from error
     else:
         logger.info(f'Bot отправил новое сообщение: "{message}"')
 
@@ -71,8 +73,12 @@ def get_api_answer(current_timestamp):
             )
             raise EndpointAPIError(message)
         return response.json()
-    except requests.exceptions.RequestException as error:
-        raise RequestAPIError from error
+    except requests.RequestException as error:
+        message = (
+            f'Произошёл сбой при запросе к эндпоинту {ENDPOINT}\n'
+            f'Ошибка: {error}'
+        )
+        raise RequestAPIError(message) from error
 
 
 def check_response(response):
@@ -96,7 +102,7 @@ def parse_status(homework):
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     if homework_status not in HOMEWORK_VERDICTS:
-        raise KeyError('Недокументированный статус домашней работы.')
+        raise AnotherStatusError('Недокументированный статус домашней работы.')
     verdict = HOMEWORK_VERDICTS.get(homework_status)
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
@@ -142,7 +148,7 @@ def main():
             else:
                 logger.debug('Статус домашней работы не изменился.')
             current_timestamp = response.get('current_date')
-        except UnauthorizedError:
+        except BotUnauthorizedError:
             logger.critical(
                 'У Bot недостаточно прав для выполнения запроса. '
                 'Возможно неправильно задан TELEGRAM_TOKEN.\n'
@@ -156,9 +162,10 @@ def main():
                 if previous_error.args != error.args:
                     send_message(bot, message)
                     previous_error = error
-            except telegram.error.BadRequest:
+            except SendMessageError as error:
                 logger.error(
                     'Bot не смог отправить сообщение об ошибке в Telegram.'
+                    f'{error}'
                 )
         finally:
             time.sleep(RETRY_TIME)
