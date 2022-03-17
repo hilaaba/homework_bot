@@ -73,12 +73,12 @@ def get_api_answer(current_timestamp):
             )
             raise EndpointAPIError(message)
         return response.json()
-    except requests.RequestException as error:
+    except Exception as error:
         message = (
             f'Произошёл сбой при запросе к эндпоинту {ENDPOINT}\n'
             f'Ошибка: {error}'
         )
-        raise RequestAPIError(message) from error
+        raise RequestAPIError(message)
 
 
 def check_response(response):
