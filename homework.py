@@ -47,7 +47,7 @@ def send_message(bot, message):
         bot.send_message(TELEGRAM_CHAT_ID, message)
     except telegram.error.Unauthorized as error:
         raise BotUnauthorizedError from error
-    except telegram.error.NetworkError as error:
+    except telegram.error.TelegramError as error:
         error_message = (
             f'При попытке отправки сообщения произошла ошибка: {error}'
         )
