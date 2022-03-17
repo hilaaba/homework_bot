@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import time
+from typing import Optional, Any, List
 
 import requests
 import telegram.error
@@ -19,11 +20,11 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-RETRY_TIME = 600
-ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
-HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
+RETRY_TIME: int = 600
+ENDPOINT: str = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
+HEADERS: dict = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-HOMEWORK_VERDICTS = {
+HOMEWORK_VERDICTS: dict = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
@@ -40,7 +41,7 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 
-def send_message(bot, message):
+def send_message(bot: Bot, message: str) -> None:
     """Bot отправляет сообщение в Telegram."""
     logger.info('Bot начал отправку сообщения в Telegram.')
     try:
@@ -56,7 +57,7 @@ def send_message(bot, message):
         logger.info(f'Bot отправил новое сообщение: "{message}"')
 
 
-def get_api_answer(current_timestamp):
+def get_api_answer(current_timestamp: Optional[int]) -> dict:
     """Отправляет запрос к API."""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
@@ -81,38 +82,38 @@ def get_api_answer(current_timestamp):
         raise RequestAPIError(message) from error
 
 
-def check_response(response):
+def check_response(response: dict) -> list:
     """Проверяет ответ от API."""
     if not isinstance(response, dict):
         raise TypeError('response не является словарем.')
     for key in ('homeworks', 'current_date'):
         if key not in response:
             raise KeyError(f'В response отсутствует ключ: {key}.')
-    homeworks = response.get('homeworks')
+    homeworks: Any = response.get('homeworks')
     if not isinstance(response.get('homeworks'), list):
         raise TypeError('homeworks не является списком.')
     return homeworks
 
 
-def parse_status(homework):
+def parse_status(homework: dict) -> str:
     """Извлекает статус домашней работы."""
     for key in ('homework_name', 'status'):
         if key not in homework:
             raise KeyError(f'В homework отсутствует ключ: {key}.')
-    homework_name = homework.get('homework_name')
-    homework_status = homework.get('status')
+    homework_name: Optional[str] = homework.get('homework_name')
+    homework_status: Optional[str] = homework.get('status')
     if homework_status not in HOMEWORK_VERDICTS:
         raise AnotherStatusError('Недокументированный статус домашней работы.')
     verdict = HOMEWORK_VERDICTS.get(homework_status)
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
-def check_tokens():
+def check_tokens() -> bool:
     """Проверяет обязательные переменные окружения."""
     return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID))
 
 
-def check_program_starting():
+def check_program_starting() -> None:
     """Проверяет запуск программы."""
     if not check_tokens():
         logger.critical(
@@ -123,25 +124,25 @@ def check_program_starting():
     logger.info('Программа запущена.')
 
 
-def main():
+def main() -> None:
     """Основная логика работы бота."""
     check_program_starting()
-    bot = Bot(token=TELEGRAM_TOKEN)
-    current_timestamp = int(time.time())
-    last_homework = 0
-    previous_homeworks = dict()
+    bot = Bot(token=str(TELEGRAM_TOKEN))
+    current_timestamp: Optional[int] = int(time.time())
+    last_homework: int = 0
+    previous_homeworks: List[dict] = list()
     previous_error = Exception()
     while True:
         try:
-            response = get_api_answer(current_timestamp)
-            homeworks = check_response(response)
+            response: dict = get_api_answer(current_timestamp)
+            homeworks: list = check_response(response)
             if not homeworks:
                 logger.debug(
                     'В настоящее время на проверке нет домашней работы или '
                     'ревьюер еще не начал проверку.'
                 )
             elif previous_homeworks != homeworks:
-                status = parse_status(homeworks[last_homework])
+                status: str = parse_status(homeworks[last_homework])
                 send_message(bot, status)
                 logger.info(status)
                 previous_homeworks = homeworks
