@@ -129,7 +129,7 @@ def main():
     bot = Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
     last_homework = 0
-    previous_homeworks = dict()
+    previous_homeworks = list()
     previous_error = Exception()
     while True:
         try:
